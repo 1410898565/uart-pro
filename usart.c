@@ -1,93 +1,97 @@
-#include<stdio.h>      /*±ê×¼ÊäÈëÊä³ö¶¨Òå*/
-#include<stdlib.h>     /*±ê×¼º¯Êı¿â¶¨Òå*/
-#include<unistd.h>     /*Unix ±ê×¼º¯Êı¶¨Òå*/
-#include<sys/types.h> 
-#include<sys/stat.h>   
-#include<fcntl.h>      /*ÎÄ¼ş¿ØÖÆ¶¨Òå*/
-#include<termios.h>    /*PPSIX ÖÕ¶Ë¿ØÖÆ¶¨Òå*/
-#include<errno.h>      /*´íÎóºÅ¶¨Òå*/
-#include<string.h>
+/*****************************************************************
+ ** æ–‡ä»¶å:  HTMngr.c
+ ** 2020-2022 ç æµ·ç¦¾ç”°ç”µå­ç§‘æŠ€æœ‰é™å…¬å¸ Co.Ltd
+ 
+ ** åˆ›å»ºäºº: éª†å†›åŸ
+ ** æ—¥  æœŸ: 2022-01
+ ** æ  è¿°: ç¨‹åºç³»ç»Ÿç®¡ç†æ¨¡å—
+ ** ç‰ˆ  æœ¬: V1.0
+
+ ** ä¿®æ”¹äºº:
+ ** æ—¥  æœŸ:
+ ** ä¿®æ”¹æè¿°:
+ ** ç‰ˆ  æœ¬: 
+******************************************************************/
+
+/*****************************************************************
+* åŒ…å«å¤´æ–‡ä»¶
+******************************************************************/
+#include <stdio.h>      /*æ ‡å‡†è¾“å…¥è¾“å‡ºå®šä¹‰*/
+#include <stdlib.h>     /*æ ‡å‡†å‡½æ•°åº“å®šä¹‰*/
+#include <unistd.h>     /*Unix æ ‡å‡†å‡½æ•°å®šä¹‰*/
+#include <sys/types.h> 
+#include <sys/stat.h>   
+#include <sys/select.h>
+
+#include <sys/time.h>
+
+#include <fcntl.h>      /*æ–‡ä»¶æ§åˆ¶å®šä¹‰*/
+#include <termios.h>    /*PPSIX ç»ˆç«¯æ§åˆ¶å®šä¹‰*/
+#include <errno.h>      /*é”™è¯¯å·å®šä¹‰*/
+#include <string.h>
 #include "usart.h"
 
-//ºê¶¨Òå
-#define FALSE  -1
-#define TRUE   0
-#define TTYSACn "/dev/ttyS2"
+/*****************************************************************
+* å®å®šä¹‰(ä»…åœ¨å½“å‰Cæ–‡ä»¶ä½¿ç”¨çš„å®å®šä¹‰å†™åœ¨å½“å‰Cæ–‡ä»¶ä¸­ï¼Œå¦åˆ™éœ€å†™åœ¨Hæ–‡ä»¶ä¸­)
+******************************************************************/
+#define FALSE  						-1
+#define TRUE   						0
 
-/*******************************************************************
-* Ãû³Æ£º               UART0_Open
-* ¹¦ÄÜ£º           ´ò¿ª´®¿Ú²¢·µ»Ø´®¿ÚÉè±¸ÎÄ¼şÃèÊö
-* Èë¿Ú²ÎÊı£º     fd    :ÎÄ¼şÃèÊö·û     port :´®¿ÚºÅ(ttyS0,ttyS1,ttyS2)
-* ³ö¿Ú²ÎÊı£º     ÕıÈ··µ»ØÎª1£¬´íÎó·µ»ØÎª0
-*******************************************************************/
-int UART_Open(void)
-{
-   int fd;
-   //1¡¢´ò¿ª´®¿Ú
-   fd = open(TTYSACn, O_RDWR|O_NOCTTY|O_NDELAY);
-   if (FALSE == fd)
-   {
-		perror("Open Serial Port Failed!\n");
-		return(FALSE);
-   }
-   //»Ö¸´´®¿ÚÎª×èÈû×´Ì¬                               
-   if(fcntl(fd, F_SETFL, 0) < 0)
-   {
-        printf("fcntl failed!\n");
-        return(FALSE);
-   }     
-   else
-   {
-        printf("fcntl=%d\n",fcntl(fd, F_SETFL,0));
-   }
-    //²âÊÔÊÇ·ñÎªÖÕ¶ËÉè±¸,ÊÇ1£¬·ñ0    
-   if(0 == isatty(fd))
-    {
-        printf("%s Serial is not a terminal device\n",TTYSACn);
-        return(FALSE);
-    }
-   else
-    {
-            printf("%s is terminal device!\n",TTYSACn);
-    }              
-	//printf("fd->open=%d\n",fd);
-	return fd;
-}
-/*******************************************************************
-* Ãû³Æ£º                UART0_Close
-* ¹¦ÄÜ£º                ¹Ø±Õ´®¿Ú²¢·µ»Ø´®¿ÚÉè±¸ÎÄ¼şÃèÊö
-* Èë¿Ú²ÎÊı£º        fd    :ÎÄ¼şÃèÊö·û     port :´®¿ÚºÅ(ttyS0,ttyS1,ttyS2)
-* ³ö¿Ú²ÎÊı£º        void
-*******************************************************************/
-void UART_Close(int fd)
-{
-    close(fd);
-}
- 
-/*******************************************************************
-* Ãû³Æ£º                UART0_Set
-* ¹¦ÄÜ£º                ÉèÖÃ´®¿ÚÊı¾İÎ»£¬Í£Ö¹Î»ºÍĞ§ÑéÎ»
-* Èë¿Ú²ÎÊı£º        fd        ´®¿ÚÎÄ¼şÃèÊö·û
-*                              speed     ´®¿ÚËÙ¶È
-*                              flow_ctrl   Êı¾İÁ÷¿ØÖÆ
-*                           databits   Êı¾İÎ»   È¡ÖµÎª 7 »òÕß8
-*                           stopbits   Í£Ö¹Î»   È¡ÖµÎª 1 »òÕß2
-*                           parity     Ğ§ÑéÀàĞÍ È¡ÖµÎªN,E,O,,S
-*³ö¿Ú²ÎÊı£º          ÕıÈ··µ»ØÎª1£¬´íÎó·µ»ØÎª0
-*******************************************************************/
+/*****************************************************************
+* ç»“æ„å®šä¹‰(ä»…åœ¨å½“å‰Cæ–‡ä»¶ä½¿ç”¨çš„ç»“æ„ä½“å†™åœ¨å½“å‰Cæ–‡ä»¶ä¸­ï¼Œå¦åˆ™éœ€å†™åœ¨Hæ–‡ä»¶ä¸­)
+******************************************************************/
+
+/*****************************************************************
+* å…¨å±€å˜é‡å®šä¹‰
+******************************************************************/
+
+/*****************************************************************
+* é™æ€å˜é‡å®šä¹‰
+******************************************************************/
+
+/*****************************************************************
+* å¤–éƒ¨å˜é‡å£°æ˜ï¼ˆå¦‚æœå…¨å±€å˜é‡æ²¡æœ‰åœ¨å…¶å®ƒçš„Hæ–‡ä»¶å£°æ˜ï¼Œå¼•ç”¨æ—¶éœ€åœ¨æ­¤å¤„å£°æ˜ï¼Œ
+*å¦‚æœå·²åœ¨å…¶å®ƒHæ–‡ä»¶å£°æ˜ï¼Œåˆ™åªéœ€åŒ…å«æ­¤Hæ–‡ä»¶å³å¯ï¼‰
+******************************************************************/
+
+/*****************************************************************
+* å‡½æ•°åŸå‹å£°æ˜
+******************************************************************/
+
+/*****************************************************************
+* å‡½æ•°å®šä¹‰
+*æ³¨æ„ï¼Œç¼–å†™å‡½æ•°éœ€é¦–å…ˆå®šä¹‰æ‰€æœ‰çš„å±€éƒ¨å˜é‡ç­‰ï¼Œä¸å…è®¸åœ¨
+*å‡½æ•°çš„ä¸­é—´å‡ºç°æ–°çš„å˜é‡çš„å®šä¹‰ã€‚
+******************************************************************/
+
+/*************************************************
+** Functionï¼š	UART0_Set
+** Descriptionï¼š	ä¸²å£å‚æ•°è®¾ç½®
+** Input:	none
+** Outputï¼š	none
+
+** Returnï¼š	0-æˆåŠŸï¼›-1-å¤±è´¥
+** Authorï¼šéª†å†›åŸ
+** Dateï¼š2022-01-25
+
+** Modification Historyï¼š
+** Authorï¼š
+** Dateï¼š
+** Descriptionï¼š
+*************************************************/
 int UART_Set(int fd,int speed,int flow_ctrl,int databits,int stopbits,char parity)
 {
-    int   i;
-    int   status;
+    int   i = 0;
+    int   status = 0;
     int   speed_arr[] = { B115200, B19200, B9600, B4800, B2400, B1200, B300};
     int   name_arr[] = {115200,  19200,  9600,  4800,  2400,  1200,  300};
          
-    struct termios options;
+    struct termios options = {0};
    
-    /*tcgetattr(fd,&options)µÃµ½ÓëfdÖ¸Ïò¶ÔÏóµÄÏà¹Ø²ÎÊı
-	²¢½«ËüÃÇ±£´æÓÚoptions,¸Ãº¯Êı»¹¿ÉÒÔ²âÊÔÅäÖÃÊÇ·ñÕıÈ·£¬
-	¸Ã´®¿ÚÊÇ·ñ¿ÉÓÃµÈ¡£Èôµ÷ÓÃ³É¹¦£¬º¯Êı·µ»ØÖµÎª0£¬
-	Èôµ÷ÓÃÊ§°Ü£¬º¯Êı·µ»ØÖµÎª1.
+    /*tcgetattr(fd,&options)å¾—åˆ°ä¸fdæŒ‡å‘å¯¹è±¡çš„ç›¸å…³å‚æ•°
+	å¹¶å°†å®ƒä»¬ä¿å­˜äºoptions,è¯¥å‡½æ•°è¿˜å¯ä»¥æµ‹è¯•é…ç½®æ˜¯å¦æ­£ç¡®ï¼Œ
+	è¯¥ä¸²å£æ˜¯å¦å¯ç”¨ç­‰ã€‚è‹¥è°ƒç”¨æˆåŠŸï¼Œå‡½æ•°è¿”å›å€¼ä¸º0ï¼Œ
+	è‹¥è°ƒç”¨å¤±è´¥ï¼Œå‡½æ•°è¿”å›å€¼ä¸º1.
     */
     if (tcgetattr( fd,&options)  !=  0)
     {
@@ -95,7 +99,7 @@ int UART_Set(int fd,int speed,int flow_ctrl,int databits,int stopbits,char parit
         return(FALSE); 
     }
   
-    //ÉèÖÃ´®¿ÚÊäÈë²¨ÌØÂÊºÍÊä³ö²¨ÌØÂÊ
+    //è®¾ç½®ä¸²å£è¾“å…¥æ³¢ç‰¹ç‡å’Œè¾“å‡ºæ³¢ç‰¹ç‡
     for ( i= 0;  i < sizeof(speed_arr) / sizeof(int);  i++)
     {
         if  (speed == name_arr[i])
@@ -105,26 +109,26 @@ int UART_Set(int fd,int speed,int flow_ctrl,int databits,int stopbits,char parit
         }
      }     
 
-    //ĞŞ¸Ä¿ØÖÆÄ£Ê½£¬±£Ö¤³ÌĞò²»»áÕ¼ÓÃ´®¿Ú
+    //ä¿®æ”¹æ§åˆ¶æ¨¡å¼ï¼Œä¿è¯ç¨‹åºä¸ä¼šå ç”¨ä¸²å£
     options.c_cflag |= CLOCAL;
-    //ĞŞ¸Ä¿ØÖÆÄ£Ê½£¬Ê¹µÃÄÜ¹»´Ó´®¿ÚÖĞ¶ÁÈ¡ÊäÈëÊı¾İ
+    //ä¿®æ”¹æ§åˆ¶æ¨¡å¼ï¼Œä½¿å¾—èƒ½å¤Ÿä»ä¸²å£ä¸­è¯»å–è¾“å…¥æ•°æ®
     options.c_cflag |= CREAD;
-    //ÉèÖÃÊı¾İÁ÷¿ØÖÆ
+    //è®¾ç½®æ•°æ®æµæ§åˆ¶
     switch(flow_ctrl)
     {
-       case 0 ://²»Ê¹ÓÃÁ÷¿ØÖÆ
+       case 0 ://ä¸ä½¿ç”¨æµæ§åˆ¶
               options.c_cflag &= ~CRTSCTS;
               break;   
       
-       case 1 ://Ê¹ÓÃÓ²¼şÁ÷¿ØÖÆ
+       case 1 ://ä½¿ç”¨ç¡¬ä»¶æµæ§åˆ¶
               options.c_cflag |= CRTSCTS;
               break;
-       case 2 ://Ê¹ÓÃÈí¼şÁ÷¿ØÖÆ
+       case 2 ://ä½¿ç”¨è½¯ä»¶æµæ§åˆ¶
               options.c_cflag |= IXON | IXOFF | IXANY;
               break;
     }
-    //ÉèÖÃÊı¾İÎ»
-    //ÆÁ±ÎÆäËû±êÖ¾Î»
+    //è®¾ç½®æ•°æ®ä½
+    //å±è”½å…¶ä»–æ ‡å¿—ä½
     options.c_cflag &= ~CSIZE;
     switch (databits)
     {  
@@ -144,27 +148,27 @@ int UART_Set(int fd,int speed,int flow_ctrl,int databits,int stopbits,char parit
                  fprintf(stderr,"Unsupported data size\n");
                  return (FALSE); 
     }
-    //ÉèÖÃĞ£ÑéÎ»
+    //è®¾ç½®æ ¡éªŒä½
     switch (parity)
     {  
        case 'n':
-       case 'N': //ÎŞÆæÅ¼Ğ£ÑéÎ»¡£
+       case 'N': //æ— å¥‡å¶æ ¡éªŒä½ã€‚
                  options.c_cflag &= ~PARENB; 
                  options.c_iflag &= ~INPCK;    
                  break; 
        case 'o':  
-       case 'O'://ÉèÖÃÎªÆæĞ£Ñé    
+       case 'O'://è®¾ç½®ä¸ºå¥‡æ ¡éªŒ    
                  options.c_cflag |= (PARODD | PARENB); 
                  options.c_iflag |= INPCK;             
                  break; 
        case 'e': 
-       case 'E'://ÉèÖÃÎªÅ¼Ğ£Ñé  
+       case 'E'://è®¾ç½®ä¸ºå¶æ ¡éªŒ  
                  options.c_cflag |= PARENB;       
                  options.c_cflag &= ~PARODD;       
                  options.c_iflag |= INPCK;      
                  break;
        case 's':
-       case 'S': //ÉèÖÃÎª¿Õ¸ñ 
+       case 'S': //è®¾ç½®ä¸ºç©ºæ ¼ 
                  options.c_cflag &= ~PARENB;
                  options.c_cflag &= ~CSTOPB;
                  break; 
@@ -172,7 +176,7 @@ int UART_Set(int fd,int speed,int flow_ctrl,int databits,int stopbits,char parit
                  fprintf(stderr,"Unsupported parity\n");    
                  return (FALSE); 
     } 
-    // ÉèÖÃÍ£Ö¹Î» 
+    // è®¾ç½®åœæ­¢ä½ 
     switch (stopbits)
     {  
        case 1:   
@@ -184,54 +188,264 @@ int UART_Set(int fd,int speed,int flow_ctrl,int databits,int stopbits,char parit
                        return (FALSE);
     }
    
-   //ĞŞ¸ÄÊä³öÄ£Ê½£¬Ô­Ê¼Êı¾İÊä³ö
+   //ä¿®æ”¹è¾“å‡ºæ¨¡å¼ï¼ŒåŸå§‹æ•°æ®è¾“å‡º
    options.c_oflag &= ~OPOST;
+   options.c_oflag &= ~(ONLCR | OCRNL);
   
-   options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);//ÎÒ¼ÓµÄ
- //options.c_lflag &= ~(ISIG | ICANON);
+   options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);//æˆ‘åŠ çš„
    
-    //ÉèÖÃµÈ´ıÊ±¼äºÍ×îĞ¡½ÓÊÕ×Ö·û
-    options.c_cc[VTIME] = 1; /* ¶ÁÈ¡Ò»¸ö×Ö·ûµÈ´ı1*(1/10)s */  
-    options.c_cc[VMIN] = 1; /* ¶ÁÈ¡×Ö·ûµÄ×îÉÙ¸öÊıÎª1 */
+   options.c_iflag &= ~(ICRNL | INLCR);
+   options.c_iflag &= ~(IXON | IXOFF | IXANY);
+
    
-    //Èç¹û·¢ÉúÊı¾İÒç³ö£¬½ÓÊÕÊı¾İ£¬µ«ÊÇ²»ÔÙ¶ÁÈ¡ Ë¢ĞÂÊÕµ½µÄÊı¾İµ«ÊÇ²»¶Á
+    //è®¾ç½®ç­‰å¾…æ—¶é—´å’Œæœ€å°æ¥æ”¶å­—ç¬¦
+    options.c_cc[VTIME] = 1; /* è¯»å–ä¸€ä¸ªå­—ç¬¦ç­‰å¾…1*(1/10)s */  
+    options.c_cc[VMIN] = 1; /* è¯»å–å­—ç¬¦çš„æœ€å°‘ä¸ªæ•°ä¸º1 */
+   
+    //å¦‚æœå‘ç”Ÿæ•°æ®æº¢å‡ºï¼Œæ¥æ”¶æ•°æ®ï¼Œä½†æ˜¯ä¸å†è¯»å– åˆ·æ–°æ”¶åˆ°çš„æ•°æ®ä½†æ˜¯ä¸è¯»
     tcflush(fd,TCIFLUSH);
    
-    //¼¤»îÅäÖÃ (½«ĞŞ¸ÄºóµÄtermiosÊı¾İÉèÖÃµ½´®¿ÚÖĞ£©
+    //æ¿€æ´»é…ç½® (å°†ä¿®æ”¹åçš„termiosæ•°æ®è®¾ç½®åˆ°ä¸²å£ä¸­ï¼‰
    if (tcsetattr(fd,TCSANOW,&options) != 0)  
    {
-       perror("com set error!\n");  
-      return (FALSE); 
+		perror("com set error!\n");  
+		return (FALSE); 
    }
-    return (TRUE); 
+   
+	return (TRUE); 
 }
-/*******************************************************************
-* Ãû³Æ£º                UART0_Init()
-* ¹¦ÄÜ£º                ´®¿Ú³õÊ¼»¯
-* Èë¿Ú²ÎÊı£º        fd       :  ÎÄ¼şÃèÊö·û   
-*               speed  :  ´®¿ÚËÙ¶È
-*                              flow_ctrl  Êı¾İÁ÷¿ØÖÆ
-*               databits   Êı¾İÎ»   È¡ÖµÎª 7 »òÕß8
-*                           stopbits   Í£Ö¹Î»   È¡ÖµÎª 1 »òÕß2
-*                           parity     Ğ§ÑéÀàĞÍ È¡ÖµÎªN,E,O,,S
-*                      
-* ³ö¿Ú²ÎÊı£º        ÕıÈ··µ»ØÎª1£¬´íÎó·µ»ØÎª0
-*******************************************************************/
-int UART_Init(Uart_Src *myuart_src)
-{
-    int err;
-	/*´ò¿ª´®¿Ú*/
-	myuart_src->fd	= UART_Open();
-	/*´®¿ÚÄ¬ÈÏ²ÎÊı³õÊ¼»¯*/
-	myuart_src->init_speed	=115200; //²¨ÌØÂÊ
-	myuart_src->flow_ctl	= 0;
-	myuart_src->stopbit		= 1;
-	myuart_src->databit		= 8;
-	myuart_src->parity		='N';
 
-    //ÉèÖÃ´®¿ÚÊı¾İÖ¡¸ñÊ½
-    err = UART_Set(myuart_src->fd,myuart_src->init_speed,myuart_src->flow_ctl,\
-		myuart_src->databit,myuart_src->stopbit,myuart_src->parity);
+/*************************************************
+** Functionï¼š	UART_Send
+** Descriptionï¼š	   å‘é€æ•°æ®
+** Input:	none
+** Outputï¼š	none
+
+** Returnï¼š	0-æˆåŠŸï¼›-1-å¤±è´¥
+** Authorï¼šéª†å†›åŸ
+** Dateï¼š2022-01-25
+
+** Modification Historyï¼š
+** Authorï¼š
+** Dateï¼š
+** Descriptionï¼š
+*************************************************/
+int UART_Send(int fd,const void *send_buf,int data_len, int mTimeout)
+{
+	int ret 	= 0;
+	struct timeval t;
+	fd_set write_fds;
+	
+	if(fd<0) return 0;
+	
+	t.tv_sec	= 0;
+	t.tv_usec	= mTimeout*1000;
+ 
+	FD_ZERO(&write_fds);
+	FD_SET(fd, &write_fds);
+ 
+	ret = select(fd + 1, NULL, &write_fds, NULL, &t);
+	if(ret < 0)
+	{
+		perror("select failed\r\n");	 
+		return 0;
+	}
+	
+	if(FD_ISSET(fd, &write_fds))
+	{
+		ret = write(fd, send_buf, data_len);
+		if(ret > 0)
+		{
+			return ret;
+		}
+		else
+		{
+			return 0;
+		}
+	}
+ 
+	return 0;
+}
+
+
+/*************************************************
+** Functionï¼š	UART0_Recv
+** Descriptionï¼š	   æ¥æ”¶ä¸²å£æ•°æ®
+** Input:	none
+** Outputï¼š	none
+
+** Returnï¼š	0-æˆåŠŸï¼›-1-å¤±è´¥
+** Authorï¼šéª†å†›åŸ
+** Dateï¼š2022-01-25
+
+** Modification Historyï¼š
+** Authorï¼š
+** Dateï¼š
+** Descriptionï¼š
+*************************************************/
+int UART_Recv(int fd, void *rcv_buf,int data_len, int mTimeout)
+{
+	int ret 		= 0;
+	int readSize	= 0;
+	fd_set read_fds = {0};
+ 
+	struct timeval t = {0};
+
+	if(fd<0) return 0;
+
+	mTimeout = mTimeout/10;
+
+	do
+	{
+		t.tv_sec	= 0;
+		t.tv_usec	= 10*1000; //msé˜»å¡
+		FD_ZERO(&read_fds);
+		FD_SET(fd, &read_fds);
+ 
+		ret = select(fd + 1, &read_fds, NULL, NULL, &t);
+		if(ret < 0)
+		{
+			perror("select failed!\r\n");
+			return -1;
+		}
+		
+		if(FD_ISSET(fd, &read_fds))
+		{
+			ret = read(fd, (uint8_t*)(rcv_buf+readSize), (data_len-readSize));
+			if(ret > 0)
+			{
+				readSize += ret;
+				//æ•°æ®è¯»å®Œäº†
+				if(readSize >= data_len)
+				{						
+					break;
+				}
+			}
+			else if(ret == 0)
+			{
+				perror("rcv occur error\r\n");	 
+				break;
+			}
+		}
+ 
+		if(mTimeout >=1)
+			mTimeout--;
+ 
+	}while(mTimeout>0);
+	
+	return readSize;
+}
+
+
+/*************************************************
+** Functionï¼š	UART0_Open
+** Descriptionï¼š	   æ‰“å¼€ä¸²å£å¹¶è¿”å›ä¸²å£è®¾å¤‡æ–‡ä»¶æè¿°
+** Input:	uartName :ä¸²å£å·(ttyS0,ttyS1,ttyS2)
+** Outputï¼š	none
+
+** Returnï¼š	0-æˆåŠŸï¼›-1-å¤±è´¥
+** Authorï¼šéª†å†›åŸ
+** Dateï¼š2022-01-25
+
+** Modification Historyï¼š
+** Authorï¼š
+** Dateï¼š
+** Descriptionï¼š
+*************************************************/
+int UART_Open(char *uartName)
+{
+   int fd = -1;
+
+	if(strlen(uartName)<3 || strlen(uartName)>24)
+	{
+		perror("pUartName error\n");
+		return(FALSE);
+   }
+   
+   //1ã€æ‰“å¼€ä¸²å£
+   fd = open(uartName, O_RDWR|O_NOCTTY|O_NDELAY);
+   if (FALSE == fd)
+   {
+		perror("Open Port Failed!\n");
+		return(FALSE);
+   }
+   
+   //æ¢å¤ä¸²å£ä¸ºé˜»å¡çŠ¶æ€                               
+   if(fcntl(fd, F_SETFL, 0) < 0)
+   {
+        perror("fcntl failed!\n");
+		goto iExit;
+   }     
+   
+	//æµ‹è¯•æ˜¯å¦ä¸ºç»ˆç«¯è®¾å¤‡,æ˜¯1ï¼Œå¦0    
+	if(0 == isatty(fd))
+	{
+		fprintf(stderr, "%s Serial is not a terminal device\n", uartName);
+		goto iExit;
+	}           
+
+	return fd;
+iExit:
+	UART_Close(fd);
+	return(FALSE);
+}
+
+/*************************************************
+** Functionï¼š	UART_Close
+** Descriptionï¼š	ä¸²å£å»åˆå§‹åŒ–
+** Input:	none
+** Outputï¼š	none
+
+** Returnï¼š	0-æˆåŠŸï¼›-1-å¤±è´¥
+** Authorï¼šéª†å†›åŸ
+** Dateï¼š2022-01-25
+
+** Modification Historyï¼š
+** Authorï¼š
+** Dateï¼š
+** Descriptionï¼š
+*************************************************/
+int UART_Close(int fd)
+{
+	if(fd>0)
+	    close(fd);
+
+	return 0;
+}
+
+
+/*************************************************
+** Functionï¼š	UART_Init
+** Descriptionï¼š	ä¸²å£åˆå§‹åŒ–
+** Input:	none
+** Outputï¼š	none
+
+** Returnï¼š	0-æˆåŠŸï¼›-1-å¤±è´¥
+** Authorï¼šéª†å†›åŸ
+** Dateï¼š2022-01-25
+
+** Modification Historyï¼š
+** Authorï¼š
+** Dateï¼š
+** Descriptionï¼š
+*************************************************/
+int UART_Init(stUartCfg *pStUartCfg)
+{
+    int err = -1;
+	
+	/*æ‰“å¼€ä¸²å£*/
+	pStUartCfg->fd	= UART_Open(pStUartCfg->uartName);
+	
+	/*ä¸²å£é»˜è®¤å‚æ•°åˆå§‹åŒ–*/
+	pStUartCfg->stopbit		= 1;
+	pStUartCfg->databit		= 8;
+	pStUartCfg->flow_ctl	= 0;
+	pStUartCfg->parity		= 'N';
+
+    //è®¾ç½®ä¸²å£æ•°æ®å¸§æ ¼å¼
+    err = UART_Set(pStUartCfg->fd,pStUartCfg->init_speed,pStUartCfg->flow_ctl,\
+		pStUartCfg->databit,pStUartCfg->stopbit,pStUartCfg->parity);
+	
 	if(err == FALSE)
     {                                                         
         return FALSE;
@@ -241,106 +455,6 @@ int UART_Init(Uart_Src *myuart_src)
         return  TRUE;
     }
 }
-
-/*********************************************************************
-*²ÎÊı£º´®¿ÚĞÅÏ¢½á¹¹
-*¹¦ÄÜ£ºĞŞ¸Ä´®¿Ú²ÎÊı
-********************************************************************/
-int UART_Reset(Uart_Src *myuart_src)
-{
-	int err;
-	char input='n';
-
-	printf("Continue to Modify Uart_Param, input: y\n");
-
-	scanf("%c",&input);
-
-	if('y'==input)
-	{
-		printf("please input baud:");
-		scanf("%d",&myuart_src->init_speed);
-		printf("please input databit:");
-		scanf("%d",&myuart_src->databit);
-		printf("please input stopbit:");
-		scanf("%d",&myuart_src->stopbit);
-		printf("please input parity:");
-		scanf("%c",&myuart_src->parity);
-		getchar();
-
-		//ÉèÖÃ´®¿ÚÊı¾İÖ¡¸ñÊ½
-		err = UART_Set(myuart_src->fd,myuart_src->init_speed,myuart_src->flow_ctl,\
-			myuart_src->databit,myuart_src->stopbit,myuart_src->parity); 
-		if(err == FALSE)
-		{                
-			printf("Set Uart failed!\n");
-			return FALSE;
-		}
-		else
-		{
-			printf("Set Uart successfully!\n");
-			return  TRUE;
-		}
-
-	}
-	else
-		printf("quit!");
-		return 0;
-}
-
-
-/********************************************************************
-* Ãû³Æ£º                  UART0_Send
-* ¹¦ÄÜ£º                ·¢ËÍÊı¾İ
-* Èë¿Ú²ÎÊı£º        
-*fd           :ÎÄ¼şÃèÊö·û    
-* send_buf    :´æ·Å´®¿Ú·¢ËÍÊı¾İ
-* data_len    :Ò»Ö¡Êı¾İµÄ¸öÊı
-* ³ö¿Ú²ÎÊı£º   ÕıÈ··µ»ØÎª1£¬´íÎó·µ»ØÎª0
-*******************************************************************/
-int UART_Send(int fd,const void *send_buf,int data_len)
-{
-    int len = 0;
-    len = write(fd,send_buf,data_len);
-    return len;
-}
-
-
-/*******************************************************************
-* Ãû³Æ£º                  UART0_Recv
-* ¹¦ÄÜ£º                ½ÓÊÕ´®¿ÚÊı¾İ
-* Èë¿Ú²ÎÊı£º 
-*fd           :ÎÄ¼şÃèÊö·û    
-*rcv_buf     :½ÓÊÕ´®¿ÚÖĞÊı¾İ´æÈërcv_buf»º³åÇøÖĞ
-*data_len    :Ò»Ö¡Êı¾İµÄ³¤¶È
-* ³ö¿Ú²ÎÊı£º ÕıÈ··µ»ØÎª1£¬´íÎó·µ»ØÎª0
-*******************************************************************/
-int UART_Recv(int fd, void *rcv_buf,int data_len)
-{
-    int len,fd_ret;
-    fd_set fds;
-    struct timeval time;
-   
-    FD_ZERO(&fds);
-    FD_SET(fd,&fds);
-   
-    time.tv_sec = 10;
-    time.tv_usec = 0;
-   
-    //Ê¹ÓÃselectÊµÏÖ´®¿ÚµÄ¶àÂ·Í¨ĞÅ
-    fd_ret = select(fd+1,&fds,NULL,NULL,&time);
-    if(fd_ret)
-    {
-        len = read(fd,rcv_buf,data_len);
-	printf("read length = %d\n",len);
-        return len;
-    }
-    else
-    {
-	    printf("Time Out!!");
-        return FALSE;
-    }     
-}
-
 
 
 
